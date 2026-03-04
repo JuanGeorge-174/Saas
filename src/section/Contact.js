@@ -7,9 +7,9 @@ function ContactContent() {
       <main className="flex-grow">
         <section id="contact" className="py-24 px-6 mt-30 text-center relative z-10">
           <div className="absolute top-0 left-0 w-full h-[300px]"></div>
-          <h2 className="text-4xl font-extrabold mb-6 z-10 relative">Let’s Get In Touch</h2>
+          <h2 className="text-4xl font-extrabold mb-6 z-10 relative">Let's Get In Touch</h2>
           <p className="text-white/70 max-w-xl mx-auto mb-6 relative z-10">
-            Have questions? Reach out and we’ll get back to you shortly.
+            Have questions? Reach out and we'll get back to you shortly.
           </p>
           <form className="max-w-xl mx-auto grid gap-4 z-10 relative">
             <input

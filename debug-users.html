@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Users</title>
+</head>
+<body>
+    <h1>User Debug Information</h1>
+    <div id="output">Loading...</div>
+    
+    <script>
+        fetch('/api/dashboard/debug-users')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('output').innerHTML = `
+                    <h2>Clinic ID: ${data.clinicId}</h2>
+                    <h3>Summary: ${data.summary.activeUsers} active, ${data.summary.deletedUsers} deleted, ${data.summary.totalUsers} total</h3>
+                    
+                    <h3>All Users:</h3>
+                    <pre>${JSON.stringify(data.allUsers, null, 2)}</pre>
+                    
+                    <h3>Active Users:</h3>
+                    <pre>${JSON.stringify(data.activeUsers, null, 2)}</pre>
+                `;
+            })
+            .catch(error => {
+                document.getElementById('output').innerHTML = `Error: ${error.message}`;
+            });
+    </script>
+</body>
+</html>

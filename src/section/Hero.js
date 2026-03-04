@@ -37,7 +37,7 @@ export default function Hero() {
           Centralize Your Practice
         </h2>
         <p className="text-lg md:text-xl text-white/80 max-w-2xl leading-relaxed font-body mb-8">
-          Manage patients, appointments, and payments with ease — all in one place.
+          Manage patients, appointments, and payments with ease - all in one place.
         </p>
 
         <Link href="/signup">

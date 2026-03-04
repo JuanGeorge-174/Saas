@@ -16,7 +16,7 @@ const features = [
   {
     title: "Scalable as You Grow",
     description:
-      "From solo practice to multiple branches — the system grows with your clinic.",
+      "From solo practice to multiple branches - the system grows with your clinic.",
     gradient: "from-green-500/20 to-emerald-500/20",
   },
   {
@@ -28,7 +28,7 @@ const features = [
   {
     title: "Seamless Integration",
     description:
-      "Easily connects with your current tools — no disruption, just improvements.",
+      "Easily connects with your current tools - no disruption, just improvements.",
     gradient: "from-yellow-500/20 to-orange-500/20",
   },
   {

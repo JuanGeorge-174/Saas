@@ -64,11 +64,10 @@ export default function Price() {
           {plans.map((plan, i) => (
             <div
               key={i}
-              className={`relative rounded-2xl p-8 backdrop-blur-md border transition-all duration-300 ${
-                plan.highlight
+              className={`relative rounded-2xl p-8 backdrop-blur-md border transition-all duration-300 ${plan.highlight
                   ? "bg-gradient-to-b from-white/5 via-[#991f5d]/20 to-[#360825]/10 border-[#ff66cc]/40 shadow-lg shadow-[#ff66cc]/30 scale-100 hover:scale-[1.05] hover:shadow-[0_0_30px_#ff66cc50]"
                   : "bg-white/5 border-white/10 hover:bg-white/10 hover:scale-[1.02]"
-              }`}
+                }`}
             >
               <h3 className="text-xl font-semibold mb-4 text-white/90">
                 {plan.name}
@@ -82,11 +81,10 @@ export default function Price() {
               <p className="text-white/60 text-sm mb-6">{plan.description}</p>
 
               <button
-                className={`w-full py-3 px-4 sm:px-6 rounded-xl font-semibold text-sm transition-all duration-300 ${
-                  plan.highlight
+                className={`w-full py-3 px-4 sm:px-6 rounded-xl font-semibold text-sm transition-all duration-300 ${plan.highlight
                     ? "bg-gradient-to-r from-[#ff66cc] to-[#cc3399] text-white hover:from-[#ff4db8] hover:to-[#b32d91] "
                     : "bg-black/20 text-white hover:bg-white/20"
-                }`}
+                  }`}
               >
                 {plan.buttonText}
               </button>
@@ -115,7 +113,7 @@ export default function Price() {
 
         {/* Footer Note */}
         <div className="text-center mt-24 mb-11 text-white/50 text-sm">
-          All plans include a 2-day free trial – no credit card required.
+          All plans include a 2-day free trial - no credit card required.
         </div>
       </div>
     </section>
