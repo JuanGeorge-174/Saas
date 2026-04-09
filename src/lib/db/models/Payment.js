@@ -16,17 +16,27 @@ const PaymentSchema = new mongoose.Schema({
         index: true
     },
 
+    isManual: {
+        type: Boolean,
+        default: false
+    },
+
+    manualPatientName: {
+        type: String,
+        trim: true
+    },
+
     patientId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Patient',
-        required: true,
+        required: function() { return !this.isManual; },
         index: true
     },
 
     visitId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Visit',
-        required: true, // STRICT RULE: Must link to a visit
+        required: function() { return !this.isManual; },
         index: true
     },
 
@@ -85,7 +95,7 @@ const PaymentSchema = new mongoose.Schema({
 });
 
 // Calculate pending amount and status before saving
-PaymentSchema.pre('save', function (next) {
+PaymentSchema.pre('save', function () {
     // Round to 2 decimal places to avoid float issues
     this.totalAmount = Math.round(this.totalAmount * 100) / 100;
     this.paidAmount = Math.round(this.paidAmount * 100) / 100;
@@ -99,8 +109,6 @@ PaymentSchema.pre('save', function (next) {
     } else {
         this.status = 'PENDING';
     }
-
-    next();
 });
 
 // Composite indexes for fast revenue reports

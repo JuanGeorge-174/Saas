@@ -19,7 +19,7 @@ import {
 import { motion } from 'framer-motion';
 
 export default function RecallPage() {
-    const [recalls, setRecalls] = useState({ due: [], hygiene: [] });
+    const [recalls, setRecalls] = useState({ due: [], hygiene: [], missed: [] });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -34,7 +34,8 @@ export default function RecallPage() {
             if (res.ok) {
                 setRecalls({
                     due: Array.isArray(data.due) ? data.due : [],
-                    hygiene: Array.isArray(data.hygiene) ? data.hygiene : []
+                    hygiene: Array.isArray(data.hygiene) ? data.hygiene : [],
+                    missed: Array.isArray(data.missed) ? data.missed : []
                 });
             }
         } catch (error) {
@@ -70,7 +71,34 @@ export default function RecallPage() {
                 </div>
             </header>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
+                {/* Missed Appointments (Newest priority) */}
+                <div className="space-y-8">
+                    <div className="flex items-center gap-4 bg-white p-4 rounded-3xl border border-slate-100 shadow-sm w-fit">
+                        <div className="p-3 bg-amber-600 rounded-2xl text-white shadow-lg shadow-amber-600/20"><AlertCircle size={20} /></div>
+                        <div>
+                            <h2 className="text-lg font-black text-slate-900 leading-none">Missed Apps</h2>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Recent No-Shows</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        {loading && recalls.missed.length === 0 ? (
+                            <div className="h-24 bg-slate-50 animate-pulse rounded-[2.5rem]"></div>
+                        ) : recalls.missed.length === 0 ? (
+                            <div className="bg-amber-50/50 p-16 rounded-[3rem] border-2 border-dashed border-amber-100 text-center flex flex-col items-center">
+                                <CheckCircle className="text-amber-200 mb-4" size={48} />
+                                <h3 className="text-lg font-bold text-slate-900">Zero No-shows</h3>
+                                <p className="text-slate-500 text-sm mt-1">All patients attended recently.</p>
+                            </div>
+                        ) : (
+                            recalls.missed.map((p) => (
+                                <RecallCard key={p.id} p={p} icon={<AlertCircle size={14} />} color="text-amber-600" onAction={handleAction} />
+                            ))
+                        )}
+                    </div>
+                </div>
+
                 {/* Manual Recalls */}
                 <div className="space-y-8">
                     <div className="flex items-center gap-4 bg-white p-4 rounded-3xl border border-slate-100 shadow-sm w-fit">

@@ -1,0 +1,22 @@
+{
+  "clinics": [
+    {
+      "id": "69c568fe95d17f8751ec936a",
+      "name": "anashwara"
+    }
+  ],
+  "users": [
+    {
+      "id": "69c774b8c56b59bfc6364c4f",
+      "clinicId": "69ad91971415781d6e260421",
+      "loginId": "anashwar",
+      "name": "anashwar"
+    },
+    {
+      "id": "69c7752dc56b59bfc6364cd4",
+      "clinicId": "69ad91971415781d6e260421",
+      "loginId": "anu",
+      "name": "anu"
+    }
+  ]
+}

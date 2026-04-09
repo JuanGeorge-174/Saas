@@ -73,10 +73,14 @@ export default async function DashboardLayout({ children }) {
                     ) : (
                         <>
                             <SidebarLink href={basePath} icon={<Home size={18} />} label="Dashboard" />
-                            <SidebarLink href="/admin/patients" icon={<Users size={18} />} label="Patients" />
-                            <SidebarLink href="/admin/appointments" icon={<Calendar size={18} />} label="Appointments" />
-                            <SidebarLink href="/admin/recalls" icon={<RefreshCcw size={18} />} label="Recalls" />
-                            <SidebarLink href="/admin/revenue" icon={<DollarSign size={18} />} label="Revenue" />
+                            {!isDoctor && (
+                                <>
+                                    <SidebarLink href="/admin/patients" icon={<Users size={18} />} label="Patients" />
+                                    <SidebarLink href="/admin/appointments" icon={<Calendar size={18} />} label="Appointments" />
+                                    <SidebarLink href="/admin/recalls" icon={<RefreshCcw size={18} />} label="Recalls" />
+                                    <SidebarLink href="/admin/revenue" icon={<DollarSign size={18} />} label="Revenue" />
+                                </>
+                            )}
 
                             {isAdmin && (
                                 <>
@@ -95,7 +99,12 @@ export default async function DashboardLayout({ children }) {
                         </div>
                         <div className="overflow-hidden flex-1">
                             <p className="text-sm font-semibold text-white truncate">{user?.fullName || 'User'}</p>
-                            <p className="text-[10px] font-medium text-gray-400 uppercase">{role}</p>
+                            <p className="text-[10px] font-medium text-gray-400 uppercase">
+                                {role === 'SUPER_ADMIN' ? 'Super Admin' : 
+                                 role === 'ADMIN' ? 'Admin' : 
+                                 role === 'DOCTOR' ? 'Doctor' : 
+                                 role === 'RECEPTIONIST' ? 'Receptionist' : role}
+                            </p>
                         </div>
                     </div>
                     <LogoutButton />

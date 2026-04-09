@@ -27,6 +27,7 @@ export default function SettingsPage() {
     // User form
     const [userForm, setUserForm] = useState({
         fullName: '',
+        email: '',
         loginId: '',
         role: 'RECEPTIONIST',
         password: ''
@@ -134,7 +135,7 @@ export default function SettingsPage() {
             if (res.ok) {
                 setShowUserModal(false);
                 await fetchUsers();
-                setUserForm({ fullName: '', loginId: '', role: 'RECEPTIONIST', password: '' });
+                setUserForm({ fullName: '', email: '', loginId: '', role: 'RECEPTIONIST', password: '' });
                 setEditingUser(null);
                 alert(editingUser ? 'User updated successfully!' : 'User created successfully!');
             } else {
@@ -355,7 +356,7 @@ export default function SettingsPage() {
                                     <button
                                         onClick={() => {
                                             setEditingUser(user);
-                                            setUserForm({ fullName: user.fullName || '', loginId: user.loginId || '', role: user.role || 'RECEPTIONIST', password: '' });
+                                            setUserForm({ fullName: user.fullName || '', email: user.email || '', loginId: user.loginId || '', role: user.role || 'RECEPTIONIST', password: '' });
                                             setShowUserModal(true);
                                         }}
                                         className="p-2 text-indigo-400 hover:bg-indigo-50/10 rounded transition"
@@ -429,6 +430,17 @@ export default function SettingsPage() {
                                     required
                                     value={userForm.fullName}
                                     onChange={(e) => setUserForm({ ...userForm, fullName: e.target.value })}
+                                    className="w-full p-3 bg-[#2a2636] text-white rounded border border-white/10 outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Email *</label>
+                                <input
+                                    type="email"
+                                    placeholder="Email Address"
+                                    required
+                                    value={userForm.email}
+                                    onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
                                     className="w-full p-3 bg-[#2a2636] text-white rounded border border-white/10 outline-none"
                                 />
                             </div>

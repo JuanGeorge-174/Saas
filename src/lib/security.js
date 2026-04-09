@@ -65,13 +65,9 @@ export function projectDTO(data, role, type = 'list') {
  */
 export function sanitizeInput(input) {
     if (typeof input !== 'string') return input;
-    return input
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;')
-        .trim();
+    // For textareas, we just want to trim. Extreme HTML escaping breaks normal plaintext saving/loading
+    // Next.js and React already escape strings when rendering to the DOM.
+    return input.trim();
 }
 
 /**

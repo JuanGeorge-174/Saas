@@ -22,9 +22,14 @@ import {
     Upload,
     Paperclip,
     Trash2,
-    Activity
+    Activity,
+    ChevronLeft,
+    ChevronRight,
+    Printer
 } from 'lucide-react';
 import { getSystemHealth } from '@/app/actions/health';
+import { saveClinicalNotes } from '@/app/actions/clinical';
+import { updateAppointmentDoctor } from '@/app/actions/appointments';
 
 /**
  * PRODUCTION DASHBOARD (OPERATIONAL VIEW)
@@ -33,37 +38,45 @@ import { getSystemHealth } from '@/app/actions/health';
  * Features Real-time Queue and Live Operational Metrics.
  */
 
-const MetricCard = ({ title, value, icon: Icon, colorClass, desc }) => (
-    <div className="bg-[#1a1525] rounded-xl p-6 border border-white/10 hover:border-[#b361ea]/50 transition-all">
-        <div className="flex justify-between items-start">
-            <div>
-                <p className="text-sm font-medium text-gray-400">{title}</p>
-                <h3 className="text-3xl font-bold text-white mt-2">{value}</h3>
-                <p className="text-xs text-gray-500 mt-1">{desc}</p>
-            </div>
-            <div className={`p-3 rounded-lg ${colorClass}`}>
-                <Icon size={24} />
+const MetricCard = ({ title, value, icon: Icon, colorClass, desc, href }) => {
+    const Inner = (
+        <div className={`bg-[#1a1525] rounded-xl p-6 border border-white/10 transition-all ${href ? 'hover:border-[#b361ea]/50 cursor-pointer' : 'hover:border-[#b361ea]/50'}`}>
+            <div className="flex justify-between items-start">
+                <div>
+                    <p className="text-sm font-medium text-gray-400">{title}</p>
+                    <h3 className="text-3xl font-bold text-white mt-2">{value}</h3>
+                    <p className="text-xs text-gray-500 mt-1">{desc}</p>
+                </div>
+                <div className={`p-3 rounded-lg ${colorClass}`}>
+                    <Icon size={24} />
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+    return href ? <Link href={href} className="block">{Inner}</Link> : Inner;
+};
 
 export default function AdminDashboard() {
     const [stats, setStats] = useState({ visitedToday: 0, pendingToday: 0, missedToday: 0, newPatientsToday: 0 });
     const [queue, setQueue] = useState([]);
     const [health, setHealth] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [doctors, setDoctors] = useState([]);
     const [treatingVisit, setTreatingVisit] = useState(null);
+    const [pastNotes, setPastNotes] = useState([]);
+    const [currentNotePage, setCurrentNotePage] = useState(0);
     const [showTreatModal, setShowTreatModal] = useState(false);
+    const [noteOnlyMode, setNoteOnlyMode] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
 
     const fetchOperationalData = useCallback(async () => {
         try {
-            const [metricsRes, queueRes, healthData] = await Promise.all([
+            const [metricsRes, queueRes, healthData, usersRes] = await Promise.all([
                 fetch('/api/dashboard/metrics', { cache: 'no-store' }),
                 fetch('/api/dashboard/live-queue', { cache: 'no-store' }),
-                getSystemHealth()
+                getSystemHealth(),
+                fetch('/api/dashboard/users', { cache: 'no-store' })
             ]);
 
             if (metricsRes.ok && queueRes.ok) {
@@ -75,6 +88,13 @@ export default function AdminDashboard() {
 
             if (healthData.success) {
                 setHealth(healthData.stats);
+            }
+
+            if (usersRes.ok) {
+                const usersData = await usersRes.json();
+                if (usersData.users) {
+                    setDoctors(usersData.users.filter(u => u.role === 'DOCTOR'));
+                }
             }
         } catch (error) {
             console.error('Operational Refresh Error:', error);
@@ -90,12 +110,38 @@ export default function AdminDashboard() {
         return () => clearInterval(interval);
     }, [fetchOperationalData]);
 
-    const handleStartTreatment = async (visitId) => {
+    const handleStartTreatment = async (visitId, mode = 'full') => {
         try {
             const res = await fetch(`/api/dashboard/visit/${visitId}`);
             if (res.ok) {
                 const data = await res.json();
-                setTreatingVisit(data);
+                
+                // Fetch past history
+                let history = [];
+                try {
+                    const histRes = await fetch(`/api/dashboard/patient/${data.patientId._id}/history`);
+                    if (histRes.ok) {
+                        const histData = await histRes.json();
+                        history = (histData.visits || []).filter(v => v._id !== visitId).reverse(); 
+                    }
+                } catch (err) {
+                    console.error('History Fetch Error:', err);
+                }
+                setPastNotes(history);
+                setCurrentNotePage(history.length);
+
+                // If opened from "Note", retain existing notes or start blank
+                if (mode === 'note') {
+                    setTreatingVisit({
+                        ...data,
+                        prescription: data.prescription || '',
+                        doctorNotes: data.doctorNotes || ''
+                    });
+                    setNoteOnlyMode(true);
+                } else {
+                    setTreatingVisit(data);
+                    setNoteOnlyMode(false);
+                }
                 setShowTreatModal(true);
                 // Automatically move to IN_PROGRESS if WAITING
                 if (data.status === 'WAITING') {
@@ -132,8 +178,7 @@ export default function AdminDashboard() {
                         body: JSON.stringify({ status: finalStatus })
                     });
                 }
-                alert('Treatment record secured!');
-                if (finalStatus) setShowTreatModal(false);
+                if (finalStatus || noteOnlyMode) setShowTreatModal(false);
                 fetchOperationalData();
             } else {
                 alert(res.error);
@@ -180,10 +225,16 @@ export default function AdminDashboard() {
 
     const getWaitColor = (color) => {
         switch (color) {
-            case 'red': return 'text-red-400 bg-red-400/10 border-red-400/20';
-            case 'blue': return 'text-blue-400 bg-blue-400/10 border-blue-400/20';
-            default: return 'text-green-400 bg-green-400/10 border-green-400/20';
+            case 'purple':
+                return 'text-[#b361ea] bg-[#b361ea]/10 border-[#b361ea]/20';
+            case 'green':
+            default:
+                return 'text-green-400 bg-green-400/10 border-green-400/20';
         }
+    };
+
+    const getPointerColorClass = (color) => {
+        return color === 'green' ? 'bg-green-400' : 'bg-[#b361ea]';
     };
 
     return (
@@ -192,7 +243,9 @@ export default function AdminDashboard() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-white">Operational Hub</h1>
-                    <p className="text-gray-400 mt-1">Live updates for {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+                    <p className="text-gray-400 mt-1">
+                        Live updates for {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                    </p>
                 </div>
                 <div className="flex gap-3">
                     <Link href="/admin/appointments" className="px-4 py-2 bg-[#b361ea] hover:bg-[#9D3DD4] text-white rounded-lg flex items-center gap-2 transition shadow-lg">
@@ -223,6 +276,7 @@ export default function AdminDashboard() {
                     icon={UserCheck}
                     colorClass="text-green-400 bg-green-400/10"
                     desc="Currently in clinic or exited"
+                    href="/admin/patients"
                 />
                 <MetricCard
                     title="Pending Appointments"
@@ -230,6 +284,7 @@ export default function AdminDashboard() {
                     icon={Clock}
                     colorClass="text-blue-400 bg-blue-400/10"
                     desc="Scheduled for today"
+                    href="/admin/appointments"
                 />
                 <MetricCard
                     title="Missed Appointments"
@@ -237,6 +292,7 @@ export default function AdminDashboard() {
                     icon={AlertCircle}
                     colorClass="text-red-400 bg-red-400/10"
                     desc="Auto-marked after 15m delay"
+                    href="/admin/recalls"
                 />
             </div>
 
@@ -265,6 +321,8 @@ export default function AdminDashboard() {
                                 <th className="px-6 py-4">Patient Details</th>
                                 <th className="px-6 py-4">Arrival</th>
                                 <th className="px-6 py-4 text-center">Wait Time</th>
+                                <th className="px-6 py-4 text-center">Visit Status</th>
+                                <th className="px-6 py-4 text-center">Prescription</th>
                                 <th className="px-6 py-4">Doctor</th>
                                 <th className="px-6 py-4 text-right">Actions</th>
                             </tr>
@@ -274,15 +332,17 @@ export default function AdminDashboard() {
                                 <tr key={item.id} className="hover:bg-white/[0.02] transition-colors group">
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-2">
-                                            <div className={`w-2 h-2 rounded-full animate-pulse ${item.status === 'IN_PROGRESS' ? 'bg-indigo-400' : 'bg-[#b361ea]'
+                                            <div className={`w-2 h-2 rounded-full animate-pulse ${item.isAppointment ? 'bg-slate-400' :
+                                                item.status === 'IN_PROGRESS' ? 'bg-indigo-400' : 'bg-[#b361ea]'
                                                 }`} />
                                             <span className="text-xs font-semibold px-2 py-1 rounded-md bg-white/5 text-gray-300">
-                                                {item.status === 'WAITING' ? 'QUEUED' : 'TREATING'}
+                                                {item.isAppointment ? (item.status === 'MISSED' ? 'MISSED' : 'SCHEDULED') : item.status === 'WAITING' ? 'QUEUED' : 'VISITED'}
                                             </span>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
+                                            <div className={`w-2 h-10 rounded-full ${getPointerColorClass(item.color)}`} />
                                             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#b361ea] to-[#eeb0f4] flex items-center justify-center text-white font-bold">
                                                 {item.patient.name[0]}
                                             </div>
@@ -296,21 +356,160 @@ export default function AdminDashboard() {
                                         {new Date(item.arrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         <div className="text-[10px] text-gray-500">{item.visitType}</div>
                                     </td>
-                                    <td className="px-6 py-4 text-center">
-                                        <span className={`px-4 py-1.5 rounded-full text-xs font-bold border transition-colors shadow-sm ${getWaitColor(item.color)}`}>
-                                            {item.waitingTime}m wait
+                                    <td className="px-6 py-4 text-center whitespace-nowrap">
+                                        <span className={`inline-block px-4 py-1.5 rounded-full text-xs font-bold border transition-colors shadow-sm whitespace-nowrap ${item.isAppointment ? 'text-slate-400 bg-slate-400/10 border-slate-400/20' : getWaitColor(item.color)
+                                            }`}>
+                                            {item.isAppointment ? 'Upcoming' : `${item.waitingTime}m wait`}
                                         </span>
                                     </td>
+                                    <td className="px-6 py-4 text-center whitespace-nowrap">
+                                        <label htmlFor={`chk-visited-${item.id}`} className="flex items-center justify-center gap-2 cursor-pointer">
+                                            <input
+                                                id={`chk-visited-${item.id}`}
+                                                type="checkbox"
+                                                className="w-4 h-4 accent-[#b361ea] cursor-pointer"
+                                                checked={item.doctorSigned || item.status === 'IN_PROGRESS'}
+                                                onChange={async (e) => {
+                                                    const checked = e.target.checked;
+                                                    
+                                                    // Optimistic UI Update
+                                                    setQueue(prev => prev.map(q => q.id === item.id ? { 
+                                                        ...q, 
+                                                        doctorSigned: checked, 
+                                                        status: checked ? 'IN_PROGRESS' : 'WAITING' 
+                                                    } : q));
+                                                    
+                                                    try {
+                                                        let visitId = item.id;
+                                                        if (item.isAppointment) {
+                                                            // Auto-arrive
+                                                            const arrRes = await fetch('/api/dashboard/live-queue/arrive', {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ type: 'APPOINTMENT', appointmentId: item.appointmentId })
+                                                            });
+                                                            const arrData = await arrRes.json();
+                                                            if(arrData.success) visitId = arrData.visitId;
+                                                            else throw new Error(arrData.error);
+                                                        }
+                                                        
+                                                        await fetch(`/api/dashboard/visit/${visitId}`, {
+                                                            method: 'PATCH',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({
+                                                                status: checked ? 'IN_PROGRESS' : 'WAITING',
+                                                                doctorSigned: checked,
+                                                                waitingStoppedAt: checked ? new Date().toISOString() : null
+                                                            })
+                                                        });
+                                                        fetchOperationalData();
+                                                    } catch (err) {
+                                                        // Revert on error
+                                                        setQueue(prev => prev.map(q => q.id === item.id ? { 
+                                                            ...q, 
+                                                            doctorSigned: !checked, 
+                                                            status: !checked ? 'IN_PROGRESS' : 'WAITING' 
+                                                        } : q));
+                                                        console.error('Doctor signed toggle error:', err);
+                                                    }
+                                                }}
+                                            />
+                                        </label>
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                        <button
+                                            type="button"
+                                            onClick={async (e) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                                let visitId = item.id;
+                                                if (item.isAppointment) {
+                                                    const arrRes = await fetch('/api/dashboard/live-queue/arrive', {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ type: 'APPOINTMENT', appointmentId: item.appointmentId })
+                                                    });
+                                                    const arrData = await arrRes.json();
+                                                    if(arrData.success) visitId = arrData.visitId;
+                                                    else return;
+                                                }
+                                                handleStartTreatment(visitId, 'note');
+                                            }}
+                                            className="px-4 py-2 text-xs font-bold rounded-md bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 transition cursor-pointer relative z-10 flex items-center gap-2 mx-auto"
+                                        >
+                                            <FileText size={14} className="text-[#b361ea]" />
+                                            Note
+                                        </button>
+                                    </td>
                                     <td className="px-6 py-4">
-                                        <div className="text-sm text-gray-300 flex items-center gap-1">
-                                            <BriefcaseMedical size={14} className="text-[#b361ea]" />
-                                            {item.doctor}
+                                        <div className="text-sm text-gray-300 flex items-center gap-2">
+                                            <BriefcaseMedical size={14} className="text-[#b361ea] shrink-0" />
+                                            {item.doctor === 'Unassigned' ? (
+                                                <select 
+                                                    className="bg-black/20 border border-[#b361ea]/30 rounded-md px-2 py-1.5 outline-none focus:border-[#b361ea] text-xs text-gray-300 w-full hover:bg-white/5 cursor-pointer"
+                                                    value=""
+                                                    onChange={async (e) => {
+                                                        const docId = e.target.value;
+                                                        if (!docId) return;
+                                                        try {
+                                                            if (item.isAppointment) {
+                                                                await updateAppointmentDoctor(item.appointmentId, docId);
+                                                            } else {
+                                                                await fetch(`/api/dashboard/visit/${item.id}`, {
+                                                                    method: 'PATCH',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ assignedDoctorId: docId })
+                                                                });
+                                                            }
+                                                            fetchOperationalData();
+                                                        } catch(err) { console.error('Assign doctor error:', err); }
+                                                    }}
+                                                >
+                                                    <option value="" disabled>Assign Doctor</option>
+                                                    {doctors.map(d => <option key={d.id} value={d.id}>Dr. {d.fullName}</option>)}
+                                                </select>
+                                            ) : (
+                                                <span className="truncate max-w-[120px]" title={item.doctor}>
+                                                    {item.doctor}
+                                                </span>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex justify-end gap-2 isolate">
+                                            {item.isAppointment && (
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            await fetch('/api/dashboard/live-queue/arrive', {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ type: 'APPOINTMENT', appointmentId: item.appointmentId })
+                                                            });
+                                                            fetchOperationalData();
+                                                        } catch (e) { }
+                                                    }}
+                                                    className="px-4 py-1.5 bg-green-500/20 text-green-400 hover:bg-green-500/30 rounded-lg text-xs font-bold transition whitespace-nowrap"
+                                                    title="Mark as Arrived"
+                                                >
+                                                    Arrive
+                                                </button>
+                                            )}
                                             <button
-                                                onClick={() => handleStartTreatment(item.id)}
+                                                onClick={async () => {
+                                                    let visitId = item.id;
+                                                    if (item.isAppointment) {
+                                                        const arrRes = await fetch('/api/dashboard/live-queue/arrive', {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ type: 'APPOINTMENT', appointmentId: item.appointmentId })
+                                                        });
+                                                        const arrData = await arrRes.json();
+                                                        if(arrData.success) visitId = arrData.visitId;
+                                                        else return;
+                                                    }
+                                                    handleStartTreatment(visitId, 'full');
+                                                }}
                                                 className="p-2 hover:bg-white/10 rounded-lg text-[#b361ea] transition"
                                                 title="Examine Patient"
                                             >
@@ -385,129 +584,306 @@ export default function AdminDashboard() {
 
                         {/* Modal Body */}
                         <div className="flex-1 overflow-y-auto p-8">
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                {/* Clinical Notes Form */}
-                                <div className="lg:col-span-2 space-y-6">
-                                    <h3 className="text-lg font-semibold text-white flex items-center gap-2 border-b border-white/5 pb-2">
-                                        <Stethoscope size={20} className="text-[#b361ea]" />
-                                        Clinical Findings
-                                    </h3>
+                            {noteOnlyMode ? (
+                                <div className="space-y-6 max-w-3xl mx-auto flex flex-col bg-[#1a1525] rounded-xl border border-white/10 p-6 shadow-xl relative overflow-hidden group">
+                                    <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#b361ea]/50 via-indigo-500/50 to-[#b361ea]/50" />
+                                    
+                                    {/* Pagination & Actions Header */}
+                                    <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                                        <div className="flex items-center gap-3">
+                                            <button 
+                                                onClick={() => setCurrentNotePage(Math.max(0, currentNotePage - 1))}
+                                                disabled={currentNotePage === 0}
+                                                className={`p-2 rounded-lg transition-colors flex items-center justify-center ${currentNotePage === 0 ? 'text-gray-600 cursor-not-allowed' : 'text-[#b361ea] hover:bg-[#b361ea]/10 hover:text-[#eeb0f4]'}`}
+                                            >
+                                                <ChevronLeft size={20} />
+                                            </button>
+                                            
+                                            <div className="text-center min-w-[150px]">
+                                                {currentNotePage === pastNotes.length ? (
+                                                    <div>
+                                                        <span className="text-sm font-bold text-white uppercase tracking-wider block">Current Visit</span>
+                                                        <span className="text-[10px] text-gray-500">{new Date(treatingVisit.arrivalTime || Date.now()).toLocaleDateString()}</span>
+                                                    </div>
+                                                ) : (
+                                                    <div>
+                                                        <span className="text-sm font-bold text-gray-300 uppercase tracking-wider block">Past Record</span>
+                                                        <span className="text-[10px] text-gray-500">{new Date(pastNotes[currentNotePage]?.visitDate).toLocaleDateString()}</span>
+                                                    </div>
+                                                )}
+                                            </div>
 
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-400 mb-1.5">Chief Complaint</label>
-                                            <textarea
-                                                className="w-full bg-[#1a1525] border border-white/10 rounded-xl p-3 text-white focus:border-[#b361ea] outline-none transition h-24 resize-none"
-                                                placeholder="What is the patient experiencing?"
-                                                value={treatingVisit.chiefComplaint}
-                                                onChange={(e) => setTreatingVisit({ ...treatingVisit, chiefComplaint: e.target.value })}
-                                            />
+                                            <button 
+                                                onClick={() => setCurrentNotePage(Math.min(pastNotes.length, currentNotePage + 1))}
+                                                disabled={currentNotePage === pastNotes.length}
+                                                className={`p-2 rounded-lg transition-colors flex items-center justify-center ${currentNotePage === pastNotes.length ? 'text-gray-600 cursor-not-allowed' : 'text-[#b361ea] hover:bg-[#b361ea]/10 hover:text-[#eeb0f4]'}`}
+                                            >
+                                                <ChevronRight size={20} />
+                                            </button>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Diagnosis</label>
-                                                <textarea
-                                                    className="w-full bg-[#1a1525] border border-white/10 rounded-xl p-3 text-white focus:border-[#b361ea] outline-none transition h-24 resize-none"
-                                                    placeholder="Clinical diagnosis..."
-                                                    value={treatingVisit.diagnosis}
-                                                    onChange={(e) => setTreatingVisit({ ...treatingVisit, diagnosis: e.target.value })}
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Proposed Treatment</label>
-                                                <textarea
-                                                    className="w-full bg-[#1a1525] border border-white/10 rounded-xl p-3 text-white focus:border-[#b361ea] outline-none transition h-24 resize-none"
-                                                    placeholder="Procedures to perform..."
-                                                    value={treatingVisit.treatment}
-                                                    onChange={(e) => setTreatingVisit({ ...treatingVisit, treatment: e.target.value })}
-                                                />
-                                            </div>
+                                        <div className="flex items-center gap-2">
+                                            <button 
+                                                onClick={() => {
+                                                    const content = currentNotePage === pastNotes.length ? treatingVisit.prescription : pastNotes[currentNotePage]?.prescription;
+                                                    if (!content) return;
+                                                    const date = currentNotePage === pastNotes.length ? new Date().toISOString().split('T')[0] : new Date(pastNotes[currentNotePage]?.visitDate).toISOString().split('T')[0];
+                                                    const blob = new Blob([`Patient Note: ${treatingVisit.patientId.fullName}\nDate: ${date}\n\n${content}`], { type: 'text/plain' });
+                                                    const url = URL.createObjectURL(blob);
+                                                    const a = document.createElement('a');
+                                                    a.href = url;
+                                                    a.download = `Note_${treatingVisit.patientId.fullName.replace(/\s+/g, '_')}_${date}.txt`;
+                                                    document.body.appendChild(a);
+                                                    a.click();
+                                                    document.body.removeChild(a);
+                                                    URL.revokeObjectURL(url);
+                                                }}
+                                                className="p-2 text-gray-400 hover:text-[#b361ea] hover:bg-[#b361ea]/10 rounded-lg transition-colors group/btn"
+                                                title="Download Note"
+                                            >
+                                                <Download size={18} className="group-hover/btn:-translate-y-0.5 transition-transform" />
+                                            </button>
+                                            <button 
+                                                onClick={() => {
+                                                    const content = currentNotePage === pastNotes.length ? treatingVisit.prescription : pastNotes[currentNotePage]?.prescription;
+                                                    if (!content) return;
+                                                    const date = currentNotePage === pastNotes.length ? new Date().toLocaleDateString() : new Date(pastNotes[currentNotePage]?.visitDate).toLocaleDateString();
+                                                    const printWindow = window.open('', '', 'width=800,height=600');
+                                                    printWindow.document.write(`
+                                                        <html>
+                                                            <head>
+                                                                <title>Patient Note - ${treatingVisit.patientId.fullName}</title>
+                                                                <style>
+                                                                    body { font-family: system-ui, sans-serif; padding: 40px; color: #111; max-width: 800px; margin: 0 auto; line-height: 1.6; }
+                                                                    .header { border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 30px; }
+                                                                    h1 { font-size: 24px; margin: 0 0 5px 0; }
+                                                                    .meta { color: #555; font-size: 14px; }
+                                                                    .content { white-space: pre-wrap; font-size: 16px; margin-bottom: 40px; }
+                                                                    .footer { border-top: 1px solid #eee; padding-top: 20px; font-size: 12px; color: #777; text-align: center; }
+                                                                </style>
+                                                            </head>
+                                                            <body>
+                                                                <div class="header">
+                                                                    <h1>Patient Note</h1>
+                                                                    <div class="meta">
+                                                                        <strong>Patient:</strong> ${treatingVisit.patientId.fullName} (ID: ${treatingVisit.patientId.patientId})<br>
+                                                                        <strong>Date:</strong> ${date}
+                                                                    </div>
+                                                                </div>
+                                                                <div class="content">${content}</div>
+                                                                <div class="footer">Confidential Medical Record</div>
+                                                            </body>
+                                                        </html>
+                                                    `);
+                                                    printWindow.document.close();
+                                                    printWindow.focus();
+                                                    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+                                                }}
+                                                className="p-2 text-gray-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors group/btn"
+                                                title="Print Note"
+                                            >
+                                                <Printer size={18} className="group-hover/btn:-translate-y-0.5 transition-transform" />
+                                            </button>
                                         </div>
+                                    </div>
 
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-400 mb-1.5">Prescription & Advice</label>
+                                    {/* Notebook Lines Background Effect */}
+                                    <div className="flex-1 relative mt-4">
+                                        <div className="absolute inset-x-0 bottom-0 top-1 pointer-events-none opacity-20" style={{ backgroundImage: 'repeating-linear-gradient(transparent, transparent 31px, rgba(255,255,255,0.1) 31px, rgba(255,255,255,0.1) 32px)' }} />
+                                        
+                                        {currentNotePage === pastNotes.length ? (
                                             <textarea
-                                                className="w-full bg-[#1a1525] border border-white/10 rounded-xl p-3 text-white focus:border-[#b361ea] outline-none transition h-24 resize-none"
-                                                placeholder="Medications, dosage, follow-up instructions..."
-                                                value={treatingVisit.prescription}
+                                                className="w-full h-[400px] bg-transparent border border-transparent rounded-xl px-4 py-2 text-white focus:bg-white/5 outline-none transition resize-none text-base relative z-10 custom-scrollbar block"
+                                                placeholder="Write the prescription / advice for this visit..."
+                                                value={treatingVisit.prescription || ''}
                                                 onChange={(e) => setTreatingVisit({ ...treatingVisit, prescription: e.target.value })}
+                                                style={{ lineHeight: '32px' }}
+                                            />
+                                        ) : (
+                                            <div 
+                                                className="w-full h-[400px] bg-transparent border border-transparent rounded-xl px-4 py-2 text-gray-300 outline-none overflow-y-auto text-base relative z-10 custom-scrollbar whitespace-pre-wrap block"
+                                                style={{ lineHeight: '32px' }}
+                                            >
+                                                {pastNotes[currentNotePage]?.prescription || <span className="text-gray-500 italic">No notes recorded for this visit.</span>}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Attached Files Section for Note */}
+                                    {(() => {
+                                        const noteFiles = currentNotePage === pastNotes.length ? treatingVisit.files : pastNotes[currentNotePage]?.files;
+                                        const canUpload = currentNotePage === pastNotes.length;
+                                        
+                                        return (
+                                            <div className="mt-4 bg-black/20 rounded-xl p-4 border border-white/5 mx-4 mb-2">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                                                        <Paperclip size={16} className="text-[#b361ea]" />
+                                                        Attached Files
+                                                    </h4>
+                                                    {canUpload && (
+                                                        <label className="cursor-pointer text-[#b361ea] hover:text-[#eeb0f4] transition flex items-center gap-1 text-xs">
+                                                            <Upload size={14} />
+                                                            <span>{uploading ? '...' : 'Add File'}</span>
+                                                            <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+                                                        </label>
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar">
+                                                    {noteFiles && noteFiles.length > 0 ? (
+                                                        noteFiles.map((f, i) => (
+                                                            <a
+                                                                key={i}
+                                                                href={f.filePath}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-gray-300 transition group"
+                                                            >
+                                                                <FileText size={14} className="text-indigo-400" />
+                                                                <span className="max-w-[150px] truncate">{f.fileName || 'Attachment'}</span>
+                                                                <ExternalLink size={12} className="opacity-0 group-hover:opacity-100 transition" />
+                                                            </a>
+                                                        ))
+                                                    ) : (
+                                                        <span className="text-xs text-gray-600 italic">No files attached to this note.</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    <div className="mt-4 flex justify-between items-center text-xs text-gray-500">
+                                        <span>Page {currentNotePage + 1} of {pastNotes.length + 1}</span>
+                                        {currentNotePage !== pastNotes.length && (
+                                            <span className="italic text-gray-400">Read-only historical note</span>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                    {/* Clinical Notes Form */}
+                                    <div className="lg:col-span-2 space-y-6">
+                                        <h3 className="text-lg font-semibold text-white flex items-center gap-2 border-b border-white/5 pb-2">
+                                            <Stethoscope size={20} className="text-[#b361ea]" />
+                                            Clinical Findings
+                                        </h3>
+
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Chief Complaint</label>
+                                                <textarea
+                                                    className="w-full bg-[#1a1525] border border-white/10 rounded-xl p-3 text-white focus:border-[#b361ea] outline-none transition h-24 resize-none"
+                                                    placeholder="What is the patient experiencing?"
+                                                    value={treatingVisit.chiefComplaint}
+                                                    onChange={(e) => setTreatingVisit({ ...treatingVisit, chiefComplaint: e.target.value })}
+                                                />
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-400 mb-1.5">Diagnosis</label>
+                                                    <textarea
+                                                        className="w-full bg-[#1a1525] border border-white/10 rounded-xl p-3 text-white focus:border-[#b361ea] outline-none transition h-24 resize-none"
+                                                        placeholder="Clinical diagnosis..."
+                                                        value={treatingVisit.diagnosis}
+                                                        onChange={(e) => setTreatingVisit({ ...treatingVisit, diagnosis: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-400 mb-1.5">Proposed Treatment</label>
+                                                    <textarea
+                                                        className="w-full bg-[#1a1525] border border-white/10 rounded-xl p-3 text-white focus:border-[#b361ea] outline-none transition h-24 resize-none"
+                                                        placeholder="Procedures to perform..."
+                                                        value={treatingVisit.treatment}
+                                                        onChange={(e) => setTreatingVisit({ ...treatingVisit, treatment: e.target.value })}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Prescription & Advice</label>
+                                                <textarea
+                                                    className="w-full bg-[#1a1525] border border-white/10 rounded-xl p-3 text-white focus:border-[#b361ea] outline-none transition h-24 resize-none"
+                                                    placeholder="Medications, dosage, follow-up instructions..."
+                                                    value={treatingVisit.prescription}
+                                                    onChange={(e) => setTreatingVisit({ ...treatingVisit, prescription: e.target.value })}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Patient Summary Sidebar */}
+                                    <div className="space-y-6">
+                                        <div className="bg-[#1a1525] border border-white/10 rounded-xl p-5 space-y-4">
+                                            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                                                <FileText size={16} className="text-[#b361ea]" />
+                                                Medical Summary
+                                            </h4>
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <span className="text-xs text-gray-500 block">History</span>
+                                                    <div className="text-sm text-white">
+                                                        {Array.isArray(treatingVisit.patientId.medicalHistory) && treatingVisit.patientId.medicalHistory.length > 0
+                                                            ? treatingVisit.patientId.medicalHistory.map((h, i) => <div key={i}>{h}</div>)
+                                                            : 'No history recorded'}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <span className="text-xs text-gray-500 block">Allergies</span>
+                                                    <div className="text-sm text-red-400 font-medium">
+                                                        {Array.isArray(treatingVisit.patientId.allergies) && treatingVisit.patientId.allergies.length > 0
+                                                            ? treatingVisit.patientId.allergies.map((a, i) => <div key={i}>{a}</div>)
+                                                            : 'No known allergies'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-[#1a1525] border border-white/10 rounded-xl p-5 space-y-4">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                                                    <Paperclip size={16} className="text-[#b361ea]" />
+                                                    Attachments
+                                                </h4>
+                                                <label className="cursor-pointer text-[#b361ea] hover:text-[#eeb0f4] transition flex items-center gap-1 text-xs">
+                                                    <Upload size={14} />
+                                                    <span>{uploading ? '...' : 'Add'}</span>
+                                                    <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+                                                </label>
+                                            </div>
+                                            <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+                                                {treatingVisit.files && treatingVisit.files.length > 0 ? (
+                                                    treatingVisit.files.map((file, idx) => (
+                                                        <a
+                                                            key={idx}
+                                                            href={file.filePath}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-3 p-2 bg-black/20 border border-white/5 rounded-lg text-xs text-gray-400 hover:text-white transition group"
+                                                        >
+                                                            <FileText size={14} className="text-indigo-400" />
+                                                            <span className="flex-1 truncate">{file.fileName}</span>
+                                                            <ExternalLink size={12} className="opacity-0 group-hover:opacity-100 transition" />
+                                                        </a>
+                                                    ))
+                                                ) : (
+                                                    <p className="text-[10px] text-gray-600 italic">No files attached to this visit.</p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-[#1a1525] border border-[#b361ea]/20 rounded-xl p-5">
+                                            <h4 className="text-sm font-bold text-[#b361ea] uppercase tracking-wider mb-3">Internal Note</h4>
+                                            <textarea
+                                                className="w-full bg-black/20 border border-white/5 rounded-lg p-2 text-sm text-gray-300 focus:border-[#b361ea] outline-none transition h-32 resize-none"
+                                                placeholder="Private clinical notes..."
+                                                value={treatingVisit.doctorNotes}
+                                                onChange={(e) => setTreatingVisit({ ...treatingVisit, doctorNotes: e.target.value })}
                                             />
                                         </div>
                                     </div>
                                 </div>
-
-                                {/* Patient Summary Sidebar */}
-                                <div className="space-y-6">
-                                    <div className="bg-[#1a1525] border border-white/10 rounded-xl p-5 space-y-4">
-                                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                                            <FileText size={16} className="text-[#b361ea]" />
-                                            Medical Summary
-                                        </h4>
-                                        <div className="space-y-3">
-                                            <div>
-                                                <span className="text-xs text-gray-500 block">History</span>
-                                                <div className="text-sm text-white">
-                                                    {Array.isArray(treatingVisit.patientId.medicalHistory) && treatingVisit.patientId.medicalHistory.length > 0
-                                                        ? treatingVisit.patientId.medicalHistory.map((h, i) => <div key={i}>{h}</div>)
-                                                        : 'No history recorded'}
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <span className="text-xs text-gray-500 block">Allergies</span>
-                                                <div className="text-sm text-red-400 font-medium">
-                                                    {Array.isArray(treatingVisit.patientId.allergies) && treatingVisit.patientId.allergies.length > 0
-                                                        ? treatingVisit.patientId.allergies.map((a, i) => <div key={i}>{a}</div>)
-                                                        : 'No known allergies'}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-[#1a1525] border border-white/10 rounded-xl p-5 space-y-4">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                                                <Paperclip size={16} className="text-[#b361ea]" />
-                                                Attachments
-                                            </h4>
-                                            <label className="cursor-pointer text-[#b361ea] hover:text-[#eeb0f4] transition flex items-center gap-1 text-xs">
-                                                <Upload size={14} />
-                                                <span>{uploading ? '...' : 'Add'}</span>
-                                                <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
-                                            </label>
-                                        </div>
-                                        <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
-                                            {treatingVisit.files && treatingVisit.files.length > 0 ? (
-                                                treatingVisit.files.map((file, idx) => (
-                                                    <a
-                                                        key={idx}
-                                                        href={file.filePath}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="flex items-center gap-3 p-2 bg-black/20 border border-white/5 rounded-lg text-xs text-gray-400 hover:text-white transition group"
-                                                    >
-                                                        <FileText size={14} className="text-indigo-400" />
-                                                        <span className="flex-1 truncate">{file.fileName}</span>
-                                                        <ExternalLink size={12} className="opacity-0 group-hover:opacity-100 transition" />
-                                                    </a>
-                                                ))
-                                            ) : (
-                                                <p className="text-[10px] text-gray-600 italic">No files attached to this visit.</p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-[#1a1525] border border-[#b361ea]/20 rounded-xl p-5">
-                                        <h4 className="text-sm font-bold text-[#b361ea] uppercase tracking-wider mb-3">Internal Note</h4>
-                                        <textarea
-                                            className="w-full bg-black/20 border border-white/5 rounded-lg p-2 text-sm text-gray-300 focus:border-[#b361ea] outline-none transition h-32 resize-none"
-                                            placeholder="Private clinical notes..."
-                                            value={treatingVisit.doctorNotes}
-                                            onChange={(e) => setTreatingVisit({ ...treatingVisit, doctorNotes: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                            )}
                         </div>
 
                         {/* Modal Footer */}
@@ -520,18 +896,20 @@ export default function AdminDashboard() {
                                 <button
                                     onClick={() => handleSaveTreatment()}
                                     disabled={saving}
-                                    className="px-6 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl flex items-center gap-2 transition"
+                                    className={`px-6 py-2.5 rounded-xl flex items-center gap-2 transition shadow-lg ${noteOnlyMode ? 'bg-gradient-to-r from-[#b361ea] to-[#eeb0f4] text-white font-bold hover:opacity-90 shadow-[#b361ea]/20' : 'bg-white/5 hover:bg-white/10 text-white'}`}
                                 >
                                     <Save size={18} />
-                                    Save Draft
+                                    {saving ? 'Saving...' : (noteOnlyMode ? 'Save Note' : 'Save Draft')}
                                 </button>
-                                <button
-                                    onClick={() => handleSaveTreatment('COMPLETED')}
-                                    disabled={saving}
-                                    className="px-6 py-2.5 bg-gradient-to-r from-[#b361ea] to-[#eeb0f4] text-white font-bold rounded-xl flex items-center gap-2 hover:opacity-90 transition shadow-lg shadow-[#b361ea]/20"
-                                >
-                                    {saving ? 'Processing...' : 'Complete & Discharge'}
-                                </button>
+                                {!noteOnlyMode && (
+                                    <button
+                                        onClick={() => handleSaveTreatment('COMPLETED')}
+                                        disabled={saving}
+                                        className="px-6 py-2.5 bg-gradient-to-r from-[#b361ea] to-[#eeb0f4] text-white font-bold rounded-xl flex items-center gap-2 hover:opacity-90 transition shadow-lg shadow-[#b361ea]/20"
+                                    >
+                                        {saving ? 'Processing...' : 'Complete & Discharge'}
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -135,8 +135,12 @@ UserSchema.statics.countUsersByClinic = function (clinicId) {
 
 // Pre-save middleware (Async version is more robust in Next.js)
 UserSchema.pre('save', async function () {
-    if (this.isModified('loginId')) {
+    if (this.isModified('loginId') && this.loginId) {
         this.loginId = this.loginId.toLowerCase().trim();
+    }
+    // Prevent duplicate null/empty email errors on sparse index
+    if (this.email === '' || this.email === null) {
+        this.email = undefined;
     }
 });
 

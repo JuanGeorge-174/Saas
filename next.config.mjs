@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* config options here */
+  // Hide the Next.js dev tools overlay button (Issues / Route / Bundler / Route Info)
+  devIndicators: false,
   // reactCompiler: true,
 };
 

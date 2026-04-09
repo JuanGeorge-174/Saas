@@ -4,6 +4,7 @@ import dbConnect from '@/lib/db/index';
 import Visit from '@/lib/db/models/Visit';
 import Appointment from '@/lib/db/models/Appointment';
 import Patient from '@/lib/db/models/Patient';
+import Payment from '@/lib/db/models/Payment';
 import { authorize } from '@/lib/auth/session';
 import { PERMISSIONS } from '@/lib/rbac/permissions';
 
@@ -24,10 +25,6 @@ export async function POST(req) {
     const { clinicId, userId } = sessionToken;
 
     await dbConnect();
-    const conn = mongoose.connection;
-    const session = await conn.startSession();
-    session.startTransaction();
-
     try {
         const body = await req.json();
         const { type, appointmentId, patientId, doctorId } = body;
@@ -45,10 +42,26 @@ export async function POST(req) {
             const appointment = await Appointment.findOne({
                 _id: appointmentId,
                 clinicId
-            }).session(session);
+            });
 
             if (!appointment) throw new Error('Appointment not found');
-            if (appointment.status === 'ARRIVED') throw new Error('Patient already marked as arrived');
+            if (appointment.status === 'ARRIVED') {
+                // Already arrived, just return the linked visit
+                if (appointment.visitId) {
+                    return NextResponse.json({ success: true, visitId: appointment.visitId, message: 'Already arrived' });
+                }
+            }
+
+            // Prevent duplicate active visit
+            const existingVisit = await Visit.findOne({
+                clinicId,
+                patientId: appointment.patientId,
+                visitDate: startOfDay,
+                status: { $in: ['WAITING', 'IN_PROGRESS'] }
+            });
+            if (existingVisit) {
+                return NextResponse.json({ success: true, visitId: existingVisit._id, message: 'Already has an active visit' });
+            }
 
             // 1. Create the Visit
             const visit = await Visit.create([{
@@ -61,13 +74,23 @@ export async function POST(req) {
                 assignedDoctorId: doctorId || appointment.doctorId,
                 status: 'WAITING',
                 createdBy: userId
-            }], { session });
+            }]);
 
             // 2. Update Appointment Status
             appointment.status = 'ARRIVED';
             appointment.arrivalTime = now;
             appointment.visitId = visit[0]._id;
-            await appointment.save({ session });
+            await appointment.save();
+
+            // 3. Create Initial Billing Record
+            await Payment.create([{
+                clinicId,
+                patientId: appointment.patientId,
+                visitId: visit[0]._id,
+                totalAmount: 0, // Will be updated by doctor or receptionist
+                status: 'PENDING',
+                createdBy: userId
+            }]);
 
             createdVisitId = visit[0]._id;
 
@@ -77,6 +100,17 @@ export async function POST(req) {
 
             const patient = await Patient.findOne({ _id: patientId, clinicId });
             if (!patient) throw new Error('Patient not found');
+
+            // Prevent duplicate active visit
+            const existingVisit = await Visit.findOne({
+                clinicId,
+                patientId: patient._id,
+                visitDate: startOfDay,
+                status: { $in: ['WAITING', 'IN_PROGRESS'] }
+            });
+            if (existingVisit) {
+                return NextResponse.json({ success: true, visitId: existingVisit._id, message: 'Already has an active visit' });
+            }
 
             // 1. Create Walk-in Visit Directly
             const visit = await Visit.create([{
@@ -88,14 +122,23 @@ export async function POST(req) {
                 assignedDoctorId: doctorId,
                 status: 'WAITING',
                 createdBy: userId
-            }], { session });
+            }]);
+
+            // 2. Create Initial Billing Record
+            await Payment.create([{
+                clinicId,
+                patientId: patient._id,
+                visitId: visit[0]._id,
+                totalAmount: 0, // Will be updated by doctor or receptionist
+                status: 'PENDING',
+                createdBy: userId
+            }]);
 
             createdVisitId = visit[0]._id;
         } else {
             throw new Error('Invalid arrival type');
         }
 
-        await session.commitTransaction();
         return NextResponse.json({
             success: true,
             visitId: createdVisitId,
@@ -103,12 +146,9 @@ export async function POST(req) {
         });
 
     } catch (error) {
-        await session.abortTransaction();
         console.error('Arrival Flow Error:', error);
         return NextResponse.json({
             error: error.message || 'Failed to process arrival'
         }, { status: 400 });
-    } finally {
-        session.endSession();
     }
 }

@@ -55,10 +55,12 @@ export default function RegisterPatientPage() {
             } else if (result.type === 'DUPLICATE_FOUND') {
                 setDuplicates(result.matches);
             } else {
-                setError(result.error);
+                console.error('Register patient error:', result);
+                setError('Unable to register patient. Please try again.');
             }
         } catch (err) {
-            setError('An unexpected error occurred');
+            console.error('Register patient error:', err);
+            setError('Unable to register patient. Please try again.');
         } finally {
             setLoading(false);
         }

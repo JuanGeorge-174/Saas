@@ -9,6 +9,7 @@ export const PERMISSIONS = {
     MANAGE_CLINIC: 'manage:clinic',
     VIEW_REVENUE: 'view:revenue',
     MANAGE_PAYMENTS: 'manage:payments',
+    MANAGE_BILLING: 'manage:billing',
     MANAGE_USERS: 'manage:users',
     DELETE_PATIENT: 'delete:patient',
     EXPORT_DATA: 'export:data',
@@ -43,6 +44,8 @@ export const ROLE_PERMISSIONS = {
         PERMISSIONS.VIEW_DASHBOARD,
         PERMISSIONS.VIEW_PATIENTS,
         PERMISSIONS.VIEW_APPOINTMENTS,
+        PERMISSIONS.MANAGE_APPOINTMENTS,
+        PERMISSIONS.CHECK_IN_PATIENTS,
         PERMISSIONS.VIEW_MEDICAL_RECORDS,
         PERMISSIONS.ADD_VISIT_NOTES,
         PERMISSIONS.UPLOAD_FILES,
@@ -64,9 +67,11 @@ export const ROLE_PERMISSIONS = {
         PERMISSIONS.VIEW_RECALLS,
         PERMISSIONS.VIEW_INVENTORY,
         PERMISSIONS.MANAGE_INVENTORY,
-        // No View Medical Records
-        // No Files
-        // No Revenue
+        PERMISSIONS.VIEW_MEDICAL_RECORDS,
+        PERMISSIONS.VIEW_FILES,
+        PERMISSIONS.VIEW_REVENUE,
+        PERMISSIONS.MANAGE_PAYMENTS,
+        PERMISSIONS.MANAGE_BILLING,
     ],
 };
 

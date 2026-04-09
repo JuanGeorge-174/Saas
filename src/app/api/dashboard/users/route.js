@@ -17,11 +17,10 @@ export async function GET(req) {
     try {
         await dbConnect();
         
-        // Get the real clinic ID from the clinic collection
-        const Clinic = require('@/lib/db/models/Clinic').default;
-        const clinic = await Clinic.findOne();
-        const realClinicId = clinic ? clinic._id : new mongoose.Types.ObjectId('507f1f77bcf86cd799439011');
-        console.log('GET - Using real clinic ID:', realClinicId);
+        const session = await authorize();
+        if (!session || !session.clinicId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const realClinicId = session.clinicId;
+        console.log('GET - Using real clinic ID from session:', realClinicId);
 
         const { searchParams } = new URL(req.url);
         const search = searchParams.get('search');
@@ -66,11 +65,10 @@ export async function POST(req) {
         await dbConnect();
         console.log('Database connected');
         
-        // Get the real clinic ID from the clinic collection
-        const Clinic = require('@/lib/db/models/Clinic').default;
-        const clinic = await Clinic.findOne();
-        const realClinicId = clinic ? clinic._id : new mongoose.Types.ObjectId('507f1f77bcf86cd799439011');
-        console.log('POST - Using real clinic ID:', realClinicId);
+        const session = await authorize();
+        if (!session || !session.clinicId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const realClinicId = session.clinicId;
+        console.log('POST - Using real clinic ID from session:', realClinicId);
         
         const body = await req.json();
         console.log('POST - Request body:', body);
@@ -128,17 +126,20 @@ export async function POST(req) {
             const hashedPassword = await bcrypt.hash(password, 10);
             console.log('Password hashed successfully');
 
-            const newUser = await User.create({
+            const userData = {
                 clinicId: realClinicId,
                 fullName,
                 loginId: loginId.toLowerCase().trim(),
-                // Don't set email field at all if not provided to avoid unique index issues
-                ...(email && { email }),
                 phone: phone || '',
                 role,
-                passwordHash: hashedPassword, // Fixed: user model uses passwordHash
+                passwordHash: hashedPassword,
                 isActive: true,
-            });
+            };
+            if (email && email.trim() !== '') {
+                userData.email = email.trim().toLowerCase();
+            }
+
+            const newUser = await User.create(userData);
             console.log('User created successfully:', newUser._id);
 
             return NextResponse.json({ success: true, user: { id: newUser._id, fullName: newUser.fullName } });
@@ -156,11 +157,10 @@ export async function DELETE(req) {
         await dbConnect();
         console.log('Database connected for DELETE');
         
-        // Get the real clinic ID from the clinic collection
-        const Clinic = require('@/lib/db/models/Clinic').default;
-        const clinic = await Clinic.findOne();
-        const realClinicId = clinic ? clinic._id : new mongoose.Types.ObjectId('507f1f77bcf86cd799439011');
-        console.log('DELETE - Using real clinic ID:', realClinicId);
+        const session = await authorize();
+        if (!session || !session.clinicId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const realClinicId = session.clinicId;
+        console.log('DELETE - Using real clinic ID from session:', realClinicId);
         
         const body = await req.json();
         console.log('DELETE - Request body:', body);

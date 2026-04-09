@@ -41,14 +41,24 @@ export default function ResetPasswordClient() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token, password })
             });
-            const data = await res.json();
-            if (data.success) {
+
+            let data = null;
+            try {
+                const text = await res.text();
+                data = text ? JSON.parse(text) : null;
+            } catch {
+                data = null;
+            }
+
+            if (data && data.success) {
                 setSuccess(true);
                 setTimeout(() => router.push('/login'), 3000);
             } else {
-                setError(data.error);
+                console.error('Reset password error:', data);
+                setError('Failed to reset password. Please try again.');
             }
         } catch (err) {
+            console.error('Reset password error:', err);
             setError('Failed to reset password. Please try again.');
         } finally {
             setLoading(false);

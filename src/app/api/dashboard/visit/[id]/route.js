@@ -3,6 +3,7 @@ import dbConnect from '@/lib/db/index';
 import Visit from '@/lib/db/models/Visit';
 import Patient from '@/lib/db/models/Patient';
 import User from '@/lib/db/models/User';
+import File from '@/lib/db/models/File';
 import { authorize } from '@/lib/auth/session';
 import { PERMISSIONS } from '@/lib/rbac/permissions';
 
@@ -50,7 +51,9 @@ export async function PATCH(req, { params }) {
             prescription,
             doctorNotes,
             status,
-            assignedDoctorId
+            assignedDoctorId,
+            doctorSigned,
+            waitingStoppedAt
         } = body;
 
         const visit = await Visit.findOne({ _id: id, clinicId });
@@ -65,6 +68,10 @@ export async function PATCH(req, { params }) {
         if (prescription !== undefined) visit.prescription = prescription;
         if (doctorNotes !== undefined) visit.doctorNotes = doctorNotes;
         if (assignedDoctorId) visit.assignedDoctorId = assignedDoctorId;
+        if (doctorSigned !== undefined) visit.doctorSigned = !!doctorSigned;
+        if (waitingStoppedAt !== undefined) {
+            visit.waitingStoppedAt = waitingStoppedAt ? new Date(waitingStoppedAt) : null;
+        }
 
         // Status update logic
         if (status) {
@@ -76,6 +83,11 @@ export async function PATCH(req, { params }) {
                 await Patient.findByIdAndUpdate(visit.patientId, {
                     lastVisitDate: visit.visitDate || new Date()
                 });
+            }
+
+            // If moving out of WAITING and waitingStoppedAt not yet set, freeze waiting time now
+            if (visit.status === 'WAITING' && status !== 'WAITING' && !visit.waitingStoppedAt) {
+                visit.waitingStoppedAt = new Date();
             }
             visit.status = status;
         }

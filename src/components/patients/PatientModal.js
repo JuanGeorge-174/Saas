@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Phone, Mail, FileText, Download, MapPin } from 'lucide-react';
 import { registerPatient } from '@/app/actions/patients';
 import { useRouter } from 'next/navigation';
@@ -9,7 +9,24 @@ export default function PatientModal({ isOpen, onClose, patient = null, role }) 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [creatingVisit, setCreatingVisit] = useState(false);
+    const [history, setHistory] = useState([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
     const router = useRouter();
+
+    useEffect(() => {
+        if (isOpen && patient?.id && (role === 'ADMIN' || role === 'DOCTOR')) {
+            setLoadingHistory(true);
+            fetch(`/api/dashboard/patient/${patient.id}/history`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.visits) {
+                        setHistory(data.visits);
+                    }
+                })
+                .catch(err => console.error('Error fetching history:', err))
+                .finally(() => setLoadingHistory(false));
+        }
+    }, [isOpen, patient?.id, role]);
 
     if (!isOpen) return null;
 
@@ -104,11 +121,56 @@ export default function PatientModal({ isOpen, onClose, patient = null, role }) 
                             <div className="md:col-span-2 space-y-6">
                                 <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center justify-between">
                                     Clinical Visit Timeline
-                                    <span className="text-[#b361ea]">RESTRICTED ACCESS</span>
                                 </h3>
-                                <p className="text-gray-500 italic text-sm py-10 text-center border border-dashed border-white/5 rounded-3xl">
-                                    Visit history and notes are managed in the Clinical module.
-                                </p>
+                                {loadingHistory ? (
+                                    <p className="text-gray-500 italic text-sm py-10 text-center">Loading history...</p>
+                                ) : history.length > 0 ? (
+                                    <div className="space-y-4 max-h-[50vh] overflow-y-auto custom-scrollbar pr-2">
+                                        {history.map((visit, idx) => (
+                                            <div key={idx} className="bg-[#1a1525] p-5 rounded-2xl border border-white/10">
+                                                <div className="flex justify-between items-center mb-3 border-b border-white/5 pb-2">
+                                                    <span className="text-xs font-bold text-[#b361ea]">
+                                                        {new Date(visit.visitDate).toLocaleDateString()}
+                                                    </span>
+                                                    <span className="text-[10px] text-gray-500 uppercase">
+                                                        Dr. {visit.assignedDoctorId?.fullName || 'Unknown'}
+                                                    </span>
+                                                </div>
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <span className="text-[10px] text-gray-500 uppercase tracking-widest block mb-1">Prescription / Notes</span>
+                                                        <div className="text-sm text-gray-300 whitespace-pre-wrap bg-black/20 p-3 rounded-lg border border-white/5">
+                                                            {visit.prescription || <span className="text-gray-600 italic">No notes recorded.</span>}
+                                                        </div>
+                                                    </div>
+                                                    {visit.files && visit.files.length > 0 && (
+                                                        <div>
+                                                            <span className="text-[10px] text-gray-500 uppercase tracking-widest block mb-1">Attached Files</span>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {visit.files.map((f, i) => (
+                                                                    <a
+                                                                        key={i}
+                                                                        href={f.filePath}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="flex items-center gap-1.5 px-2 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-md text-[10px] text-gray-400 hover:text-white transition"
+                                                                    >
+                                                                        <FileText size={10} className="text-indigo-400" />
+                                                                        <span className="max-w-[100px] truncate">{f.fileName}</span>
+                                                                    </a>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-gray-500 italic text-sm py-10 text-center border border-dashed border-white/5 rounded-3xl">
+                                        No past clinical visits found for this patient.
+                                    </p>
+                                )}
                             </div>
                         </div>
                     ) : (

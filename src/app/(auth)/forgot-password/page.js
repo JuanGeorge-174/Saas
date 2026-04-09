@@ -20,16 +20,28 @@ export default function ForgotPasswordPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)
             });
-            const data = await res.json();
-            if (data.success || data.message) {
+
+            let data = null;
+            try {
+                const text = await res.text();
+                data = text ? JSON.parse(text) : null;
+            } catch {
+                data = null;
+            }
+
+            if (data && (data.success || data.message)) {
                 setMessage(data.message);
                 if (data.debugToken) {
                     console.log("DEBUG: Your reset token is:", data.debugToken);
                 }
+            } else if (!res.ok) {
+                console.error('Forgot password error:', data);
+                setError('Unable to process request. Please try again.');
             } else {
-                setError(data.error);
+                setError('Something went wrong. Please try again.');
             }
         } catch (err) {
+            console.error('Forgot password error:', err);
             setError('Something went wrong. Please try again.');
         } finally {
             setLoading(false);

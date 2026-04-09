@@ -30,10 +30,17 @@ export default function LoginPage() {
                 }),
             });
 
-            const data = await res.json();
+            let data = null;
+            try {
+                const text = await res.text();
+                data = text ? JSON.parse(text) : null;
+            } catch {
+                data = null;
+            }
 
             if (!res.ok) {
-                throw new Error(data.error || 'Login failed');
+                const message = (data && data.error) || 'Login failed';
+                throw new Error(message);
             }
 
             const role = data.user.role;
@@ -43,7 +50,8 @@ export default function LoginPage() {
             else router.push('/admin');
 
         } catch (err) {
-            setError(err.message);
+            console.error('Login error:', err);
+            setError('Unable to login. Please check your details and try again.');
         } finally {
             setLoading(false);
         }

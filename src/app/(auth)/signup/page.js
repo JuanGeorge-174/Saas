@@ -37,16 +37,29 @@ export default function SignupPage() {
                 body: JSON.stringify(formData),
             });
 
-            const data = await res.json();
+            const text = await res.text();
+
+            // Try to parse JSON, but don't fail if it's HTML or plain text
+            let data = null;
+            try {
+                data = text ? JSON.parse(text) : null;
+            } catch {
+                data = null;
+            }
 
             if (!res.ok) {
-                throw new Error(data.error || 'Signup failed');
+                const serverMessage =
+                    (data && data.error) ||
+                    (typeof text === 'string' && text.startsWith('<') ? null : text) ||
+                    `Signup failed (${res.status})`;
+                throw new Error(serverMessage || 'Signup failed');
             }
 
             router.push('/admin');
 
         } catch (err) {
-            setError(err.message);
+            console.error('Signup error:', err);
+            setError('Something went wrong. Please try again.');
         } finally {
             setLoading(false);
         }

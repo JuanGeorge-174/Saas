@@ -98,6 +98,7 @@ export async function POST(req) {
                 clinicId: newClinic._id,
                 userId: newUser._id,
                 action: 'SIGNUP',
+                moduleName: 'AUTH',
                 resource: 'CLINIC',
                 resourceId: newClinic._id,
                 req

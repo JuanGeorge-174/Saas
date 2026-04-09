@@ -103,6 +103,18 @@ const VisitSchema = new mongoose.Schema({
         default: ''
     },
 
+    // Queue workflow helpers
+    waitingStoppedAt: {
+        type: Date,
+        default: null
+    },
+
+    doctorSigned: {
+        type: Boolean,
+        default: false,
+        index: true
+    },
+
     // File uploads (X-rays, reports, images)
     files: [{
         type: mongoose.Schema.Types.ObjectId,
@@ -147,10 +159,5 @@ VisitSchema.index(
         partialFilterExpression: { status: { $in: ['WAITING', 'IN_PROGRESS'] } }
     }
 );
-
-// Force model cleanup for Dev hot-reloads
-if (process.env.NODE_ENV === 'development') {
-    delete mongoose.models.Visit;
-}
 
 export default mongoose.models.Visit || mongoose.model('Visit', VisitSchema);

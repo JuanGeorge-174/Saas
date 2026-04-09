@@ -69,6 +69,43 @@ export async function createAppointment(data) {
 }
 
 /**
+ * UPDATE APPOINTMENT DOCTOR ASSIGNMENT
+ */
+export async function updateAppointmentDoctor(id, doctorId) {
+    try {
+        await dbConnect();
+        const session = await authorize(PERMISSIONS.MANAGE_APPOINTMENTS);
+        const { clinicId, userId } = session;
+
+        const appointment = await Appointment.findOneAndUpdate(
+            { _id: id, clinicId },
+            { doctorId: doctorId },
+            { new: true }
+        );
+
+        if (!appointment) return { success: false, error: 'Appointment not found' };
+
+        await logAction({
+            clinicId,
+            userId,
+            action: 'APPOINTMENT_DOCTOR_UPDATED',
+            moduleName: 'APPOINTMENTS',
+            resource: 'APPOINTMENT',
+            resourceId: appointment._id,
+            changes: { doctorId },
+            severity: 'INFO'
+        });
+
+        revalidatePath('/admin/appointments');
+        revalidatePath('/admin'); // For dashboard queue
+
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: 'Failed to update doctor' };
+    }
+}
+
+/**
  * UPDATE APPOINTMENT STATUS (Lifecycle)
  */
 export async function updateAppointmentStatus(id, status) {

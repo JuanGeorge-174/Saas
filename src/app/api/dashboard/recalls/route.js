@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/index';
 import Patient from '@/lib/db/models/Patient';
+import Appointment from '@/lib/db/models/Appointment';
 import { authorize } from '@/lib/auth/session';
 import { PERMISSIONS } from '@/lib/rbac/permissions';
 
@@ -46,6 +47,22 @@ export async function GET(req) {
             .sort({ lastVisitDate: 1 })
             .lean();
 
+        // Find missed appointments in the last 7 days
+        const missedAppointments = await Appointment.find({
+            clinicId,
+            status: 'MISSED',
+            appointmentDate: { $gte: sevenDaysAgo, $lte: today }
+        })
+            .populate('patientId')
+            .sort({ appointmentDate: -1 })
+            .lean();
+
+        const missedFiltered = missedAppointments.filter(app => {
+            if (!app.patientId) return false;
+            if (app.patientId.lastContacted && new Date(app.patientId.lastContacted) > new Date(app.appointmentDate)) return false;
+            return true;
+        });
+
         return NextResponse.json({
             due: duePatients.map(p => ({
                 id: p._id,
@@ -64,6 +81,15 @@ export async function GET(req) {
                 date: p.lastVisitDate,
                 lastContacted: p.lastContacted,
                 type: 'INACTIVE'
+            })),
+            missed: missedFiltered.map(app => ({
+                id: app.patientId._id, // use patientId for snooze/contact actions
+                name: app.patientId.fullName,
+                patientId: app.patientId.patientId,
+                phone: app.patientId.phone,
+                date: app.appointmentDate,
+                lastContacted: app.patientId.lastContacted,
+                type: 'MISSED_APPOINTMENT'
             }))
         });
 

@@ -77,6 +77,8 @@ export async function POST(req) {
             userId: user._id.toString(),
             clinicId: user.clinicId.toString(),
             role: user.role,
+            clinicName: clinic.clinicName,
+            fullName: user.fullName
         };
 
         const accessToken = signAccessToken(payload);
@@ -102,6 +104,7 @@ export async function POST(req) {
                 clinicId: user.clinicId,
                 userId: user._id,
                 action: 'LOGIN',
+                moduleName: 'AUTH',
                 resource: 'USER',
                 resourceId: user._id,
                 req
